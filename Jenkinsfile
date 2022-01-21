@@ -1,8 +1,8 @@
-def CONTAINER_NAME = "calculator"
 def ENV_NAME = getEnvName(env.BRANCH_NAME)
+def CONTAINER_NAME = "calculator-"+ ENV_NAME
 def CONTAINER_TAG = getTag(env.BUILD_NUMBER, env.BRANCH_NAME)
 def HTTP_PORT = getHTTPPort(env.BRANCH_NAME)
-def EMAIL_RECIPIENTS = "philippe.guemkamsimo@gmail.com"
+def EMAIL_RECIPIENTS = "totobaso282@gmail.com"
 
 
 node {
@@ -37,19 +37,19 @@ node {
         stage("Image Prune") {
             imagePrune(CONTAINER_NAME)
         }
-
+         //construction de notre image
         stage('Image Build') {
             imageBuild(CONTAINER_NAME, CONTAINER_TAG)
         }
-
+          //pousser notre containeur dans le docker registry
         stage('Push to Docker Registry') {
-            withCredentials([usernamePassword(credentialsId: 'DockerhubCredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: 'dockerhubcredential', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 pushToImage(CONTAINER_NAME, CONTAINER_TAG, USERNAME, PASSWORD)
             }
         }
-
+        // Executer l'image
         stage('Run App') {
-            withCredentials([usernamePassword(credentialsId: 'DockerhubCredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: 	'dockerhubcredential', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 runApp(CONTAINER_NAME, CONTAINER_TAG, USERNAME, HTTP_PORT, ENV_NAME)
 
             }
@@ -61,7 +61,7 @@ node {
     }
 
 }
-
+// surpression des containeurs non utilises
 def imagePrune(containerName) {
     try {
         sh "docker image prune -f"
@@ -71,10 +71,10 @@ def imagePrune(containerName) {
 }
 
 def imageBuild(containerName, tag) {
-    sh "docker build -t $containerName:$tag  -t $containerName --pull --no-cache ."
+    sh "docker build -t $containerName:$tag  --pull --no-cache ."
     echo "Image build complete"
 }
-
+// push image docker to the registry
 def pushToImage(containerName, tag, dockerUser, dockerPassword) {
     sh "docker login -u $dockerUser -p $dockerPassword"
     sh "docker tag $containerName:$tag $dockerUser/$containerName:$tag"
@@ -83,7 +83,7 @@ def pushToImage(containerName, tag, dockerUser, dockerPassword) {
 }
 
 def runApp(containerName, tag, dockerHubUser, httpPort, envName) {
-    sh "docker pull $dockerHubUser/$containerName"
+    sh "docker pull $dockerHubUser/$containerName:$tag"
     sh "docker run --rm --env SPRING_ACTIVE_PROFILES=$envName -d -p $httpPort:$httpPort --name $containerName $dockerHubUser/$containerName:$tag"
     echo "Application started on port: ${httpPort} (http)"
 }
@@ -96,14 +96,14 @@ def sendEmail(recipients) {
 }
 
 String getEnvName(String branchName) {
-    if (branchName == 'main') {
+    if (branchName == 'master') {
         return 'prod'
     }
     return (branchName == 'develop') ? 'uat' : 'dev'
 }
 
 String getHTTPPort(String branchName) {
-    if (branchName == 'main') {
+    if (branchName == 'master') {
         return '9003'
     }
     return (branchName == 'develop') ? '9002' : '9001'
